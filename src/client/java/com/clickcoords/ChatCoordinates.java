@@ -12,6 +12,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.util.StringDecomposer;
 
 public final class ChatCoordinates {
     private static final ArrayDeque<WeakReference<ClickEvent.CopyToClipboard>> LOCAL_CLICKS = new ArrayDeque<>();
@@ -45,13 +46,21 @@ public final class ChatCoordinates {
     }
 
     public static Component decorate(Component message) {
+        return decorate(message, "ru_ru".equals(Minecraft.getInstance().getLanguageManager().getSelected()));
+    }
+
+    static Component decorate(Component message, boolean russian) {
         StringBuilder plain = new StringBuilder();
         List<Span> spans = new ArrayList<>();
         message.<Void>visit((style, text) -> {
-            if (!text.isEmpty()) {
-                int start = plain.length();
-                plain.append(text);
-                spans.add(new Span(start, plain.length(), style));
+            // Vanilla removes embedded legacy formatting before rendering. Match that visible text.
+            if (text.indexOf('§') < 0) {
+                appendSpan(plain, spans, text, style);
+            } else {
+                StringDecomposer.iterateFormatted(text, style, (index, appliedStyle, codePoint) -> {
+                    appendSpan(plain, spans, Character.toString(codePoint), appliedStyle);
+                    return true;
+                });
             }
             return Optional.empty();
         }, Style.EMPTY);
@@ -60,8 +69,8 @@ public final class ChatCoordinates {
         List<CoordinateParser.Match> hits = CoordinateParser.find(text);
         if (hits.isEmpty()) return message;
 
-        // If any part already has a server/plugin click action, preserve the entire match as-is.
-        // A transformed label never starts a command or changes a pre-existing link.
+        // Preserve server/plugin click actions by default. On explicitly labeled coordinates,
+        // only the coordinate span itself gets the local copy action; other links are unchanged.
         List<Edit> edits = new ArrayList<>();
         for (var hit : hits) {
             boolean occupied = false;
@@ -72,13 +81,13 @@ public final class ChatCoordinates {
                     break;
                 }
             }
-            if (!occupied) edits.add(new Edit(hit, createLocalClick(hit.copy())));
+            if (!occupied || CoordinateParser.explicitCoordinates(text, hit)) {
+                edits.add(new Edit(hit, createLocalClick(hit.copy())));
+            }
         }
         if (edits.isEmpty()) return message;
 
         // Loader alone does not register assets from mods as vanilla resource packs.
-        String lang = Minecraft.getInstance().getLanguageManager().getSelected();
-        boolean russian = "ru_ru".equals(lang);
         String tooltip = russian ? "Нажми, чтобы скопировать: %s" : "Click to copy: %s";
         String waypointTooltip = russian ? "Shift+клик: поставить или снять метку" : "Shift+click: toggle waypoint";
         MutableComponent output = Component.empty();
@@ -98,7 +107,7 @@ public final class ChatCoordinates {
                 }
                 Style styled = span.style.withColor(ChatFormatting.AQUA).withUnderlined(true)
                         .withClickEvent(hit.event());
-                if (span.style.getHoverEvent() == null) {
+                if (span.style.getHoverEvent() == null || span.style.getClickEvent() != null) {
                     styled = styled.withHoverEvent(new HoverEvent.ShowText(
                             Component.translatableWithFallback("clickcoords.tooltip.copy", tooltip, hit.copy())
                                     .append("\n").append(Component.translatableWithFallback(
@@ -110,6 +119,17 @@ public final class ChatCoordinates {
             }
         }
         return output;
+    }
+
+    private static void appendSpan(StringBuilder plain, List<Span> spans, String text, Style style) {
+        if (text.isEmpty()) return;
+        int start = plain.length();
+        plain.append(text);
+        if (!spans.isEmpty() && spans.getLast().style.equals(style)) {
+            Span last = spans.removeLast();
+            start = last.start;
+        }
+        spans.add(new Span(start, plain.length(), style));
     }
 
     private static void append(MutableComponent parent, String text, int from, int to, Style style) {

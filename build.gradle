@@ -50,3 +50,24 @@ tasks.register('runExactClient', net.fabricmc.loom.task.prod.ClientProductionRun
     programArgs.addAll('--username', providers.gradleProperty('qaUsername').getOrElse('CoordsQA'),
             '--accessToken', '0', '--version', minecraft_version)
 }
+
+sourceSets {
+    coordRegression {
+        java.srcDir('tests')
+        compileClasspath += sourceSets.client.runtimeClasspath
+        runtimeClasspath += sourceSets.client.runtimeClasspath
+    }
+}
+tasks.register('coordinateParserRegression', JavaExec) {
+    classpath = sourceSets.coordRegression.runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    mainClass = 'CoordinateParserTest'
+}
+tasks.register('chatCoordinateRegression', JavaExec) {
+    classpath = sourceSets.coordRegression.runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    mainClass = 'com.clickcoords.ChatCoordinatesTest'
+}
+tasks.named('check') {
+    dependsOn 'coordinateParserRegression', 'chatCoordinateRegression'
+}

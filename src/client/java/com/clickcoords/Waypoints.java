@@ -10,7 +10,7 @@ public final class Waypoints {
     private static final long LIFETIME_NS = Duration.ofMinutes(5).toNanos();
     private static Marker marker;
 
-    public record Marker(Vec3 position, ClientLevel level, long placedAt) {}
+    public record Marker(Vec3 position, ClientLevel level, long placedAt, boolean horizontalOnly) {}
 
     private Waypoints() {}
 
@@ -29,12 +29,16 @@ public final class Waypoints {
     public static boolean toggle(Minecraft client, String coordinates) {
         if (client.level == null || client.player == null) return false;
         String[] xyz = coordinates.split(" ", -1);
-        if (xyz.length != 3) return false;
+        boolean horizontal = xyz.length == 2;
+        if (!horizontal && xyz.length != 3) return false;
         try {
-            var point = new Vec3(Double.parseDouble(xyz[0]), Double.parseDouble(xyz[1]), Double.parseDouble(xyz[2]));
+            var point = new Vec3(Double.parseDouble(xyz[0]), horizontal ? client.player.getBlockY() : Double.parseDouble(xyz[1]),
+                    Double.parseDouble(xyz[xyz.length - 1]));
             if (!valid(point.x) || !valid(point.y) || !valid(point.z)) return false;
             Marker old = active(client);
-            marker = old != null && old.position.equals(point) ? null : new Marker(point, client.level, System.nanoTime());
+            boolean same = old != null && old.horizontalOnly == horizontal && (horizontal
+                    ? old.position.x == point.x && old.position.z == point.z : old.position.equals(point));
+            marker = same ? null : new Marker(point, client.level, System.nanoTime(), horizontal);
             return true;
         } catch (NumberFormatException invalid) {
             return false;

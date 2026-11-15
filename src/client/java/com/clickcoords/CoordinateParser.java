@@ -43,6 +43,21 @@ public final class CoordinateParser {
     private static final Pattern UNLABELED = Pattern.compile(
             LEFT + "(" + NUM + ")" + WS + "+(" + NUM + ")" + WS + "+(" + NUM + ")" + RIGHT, FLAGS);
 
+    private static final Pattern BRACKETED_PAIR = Pattern.compile(
+            "([\\[(])" + H + "(" + NUM + ")" + DIV + "(" + NUM + ")" + H + "([\\])])", FLAGS);
+    private static final Pattern PAIR = Pattern.compile(LEFT + "(" + NUM + ")" + DIV + "(" + NUM + ")" + RIGHT, FLAGS);
+    private static final Pattern THOUSANDS_PAIR = Pattern.compile("[+\\-−]?[0-9]{1,3},[0-9]{3}");
+    private static final Pattern LABELED_PAIR = Pattern.compile(
+            "(?<![\\p{L}\\p{N}_])x" + H + "(?:" + PUNCT + H + ")?(" + NUM + ")"
+            + DIV + "z" + H + "(?:" + PUNCT + H + ")?(" + NUM + ")" + RIGHT, FLAGS);
+    private static final Pattern STANDALONE = Pattern.compile(H + NUM + DIV + NUM + "(?:" + DIV + NUM + ")?" + H, FLAGS);
+
+    /** Explicit coordinate context may take priority over an inherited plugin chat action. */
+    public static boolean explicitCoordinates(String text, Match m) {
+        return hasCoordinateCue(text, m.start) || LABELED.matcher(text.substring(m.start, m.end)).matches()
+                || LABELED_PAIR.matcher(text.substring(m.start, m.end)).matches();
+    }
+
     private CoordinateParser() {}
 
     /** start is inclusive and end exclusive, both UTF-16 offsets into the original line. */
@@ -69,8 +84,31 @@ public final class CoordinateParser {
         }
         Matcher plain = UNLABELED.matcher(text);
         while (out.size() < MAX_MATCHES && plain.find()) {
-            if (!hasCoordinateCue(text, plain.start()) || adjacentWhitespaceValue(text, plain.end())) continue;
+            if (!(hasCoordinateCue(text, plain.start()) || STANDALONE.matcher(text).matches())
+                    || adjacentWhitespaceValue(text, plain.end())) continue;
             add(out, plain, 1, 2, 3);
+        }
+        Matcher bracketPairs = BRACKETED_PAIR.matcher(text);
+        while (out.size() < MAX_MATCHES && bracketPairs.find()) {
+            boolean square = "[".equals(bracketPairs.group(1));
+            if (square != "]".equals(bracketPairs.group(4))) continue;
+            if (looksLikeListOfGroups(text, bracketPairs.start(), bracketPairs.end())
+                    || hasNumberListCue(text, bracketPairs.start())) continue;
+            // Do not mistake [1,234] for a coordinate pair unless a coordinate cue precedes it.
+            if (THOUSANDS_PAIR.matcher(bracketPairs.group().substring(1, bracketPairs.group().length() - 1)).matches()
+                    && !hasCoordinateCue(text, bracketPairs.start())) continue;
+            add(out, bracketPairs, 2, 3, 0);
+        }
+        Matcher labeledPairs = LABELED_PAIR.matcher(text);
+        while (out.size() < MAX_MATCHES && labeledPairs.find()) add(out, labeledPairs, 1, 2, 0);
+        Matcher pairs = PAIR.matcher(text);
+        while (out.size() < MAX_MATCHES && pairs.find()) {
+            if (!(hasCoordinateCue(text, pairs.start()) || STANDALONE.matcher(text).matches())
+                    || THOUSANDS_PAIR.matcher(pairs.group()).matches() && !hasCoordinateCue(text, pairs.start())
+                    || adjacentWhitespaceValue(text, pairs.end())
+                    || adjacentDelimiterValue(text, pairs.start(), pairs.end(), ',')
+                    || adjacentDelimiterValue(text, pairs.start(), pairs.end(), ';')) continue;
+            add(out, pairs, 1, 2, 0);
         }
         out.sort(Comparator.comparingInt(Match::start));
         return List.copyOf(out);
@@ -79,7 +117,7 @@ public final class CoordinateParser {
     private static void add(List<Match> out, Matcher m, int x, int y, int z) {
         int start = m.start(), end = m.end();
         for (Match existing : out) if (existing.start < end && start < existing.end) return;
-        out.add(new Match(start, end, normalize(m.group(x)) + " " + normalize(m.group(y)) + " " + normalize(m.group(z))));
+        out.add(new Match(start, end, normalize(m.group(x)) + " " + normalize(m.group(y)) + (z == 0 ? "" : " " + normalize(m.group(z)))));
     }
 
     private static String normalize(String number) {
