@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "clickcoords",
+  "version": "${version}",
+  "name": "ClickCoords",
+  "description": "Click recognized coordinates in Minecraft chat to copy them.",
+  "environment": "client",
+  "mixins": ["clickcoords.client.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "=1.21.11",
+    "java": ">=21"
+  }
+}
