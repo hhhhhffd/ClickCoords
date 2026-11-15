@@ -1,1 +1,4 @@
-{"clickcoords.tooltip.copy":"Нажми, чтобы скопировать: %s"}
+{
+  "clickcoords.tooltip.copy": "Нажми, чтобы скопировать: %s",
+  "clickcoords.tooltip.waypoint": "Shift+клик: поставить или снять метку"
+}

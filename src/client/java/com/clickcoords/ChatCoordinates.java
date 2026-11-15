@@ -1,5 +1,7 @@
 package com.clickcoords;
 
+import java.lang.ref.WeakReference;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -12,9 +14,35 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 
 public final class ChatCoordinates {
+    private static final ArrayDeque<WeakReference<ClickEvent.CopyToClipboard>> LOCAL_CLICKS = new ArrayDeque<>();
+
     private ChatCoordinates() {}
 
+    /** Reference identity distinguishes our decoration from an identical server-provided copy action. */
+    public static String recognizedCopy(ClickEvent event) {
+        if (!(event instanceof ClickEvent.CopyToClipboard copy)) return null;
+        for (var reference : LOCAL_CLICKS) {
+            if (reference.get() == copy) return copy.value();
+        }
+        return null;
+    }
+
+    private static ClickEvent.CopyToClipboard createLocalClick(String coordinates) {
+        var event = new ClickEvent.CopyToClipboard(coordinates);
+        if (LOCAL_CLICKS.size() >= 4096) {
+            LOCAL_CLICKS.removeIf(reference -> reference.get() == null);
+            if (LOCAL_CLICKS.size() >= 4096) LOCAL_CLICKS.removeFirst();
+        }
+        LOCAL_CLICKS.addLast(new WeakReference<>(event));
+        return event;
+    }
+
     private record Span(int start, int end, Style style) {}
+    private record Edit(CoordinateParser.Match match, ClickEvent.CopyToClipboard event) {
+        int start() { return match.start(); }
+        int end() { return match.end(); }
+        String copy() { return match.copy(); }
+    }
 
     public static Component decorate(Component message) {
         StringBuilder plain = new StringBuilder();
@@ -34,7 +62,7 @@ public final class ChatCoordinates {
 
         // If any part already has a server/plugin click action, preserve the entire match as-is.
         // A transformed label never starts a command or changes a pre-existing link.
-        List<CoordinateParser.Match> edits = new ArrayList<>();
+        List<Edit> edits = new ArrayList<>();
         for (var hit : hits) {
             boolean occupied = false;
             for (Span span : spans) {
@@ -44,13 +72,15 @@ public final class ChatCoordinates {
                     break;
                 }
             }
-            if (!occupied) edits.add(hit);
+            if (!occupied) edits.add(new Edit(hit, createLocalClick(hit.copy())));
         }
         if (edits.isEmpty()) return message;
 
         // Loader alone does not register assets from mods as vanilla resource packs.
         String lang = Minecraft.getInstance().getLanguageManager().getSelected();
-        String tooltip = "ru_ru".equals(lang) ? "Нажми, чтобы скопировать: %s" : "Click to copy: %s";
+        boolean russian = "ru_ru".equals(lang);
+        String tooltip = russian ? "Нажми, чтобы скопировать: %s" : "Click to copy: %s";
+        String waypointTooltip = russian ? "Shift+клик: поставить или снять метку" : "Shift+click: toggle waypoint";
         MutableComponent output = Component.empty();
         int editIndex = 0;
         for (Span span : spans) {
@@ -67,10 +97,12 @@ public final class ChatCoordinates {
                     cursor = hit.start();
                 }
                 Style styled = span.style.withColor(ChatFormatting.AQUA).withUnderlined(true)
-                        .withClickEvent(new ClickEvent.CopyToClipboard(hit.copy()));
+                        .withClickEvent(hit.event());
                 if (span.style.getHoverEvent() == null) {
                     styled = styled.withHoverEvent(new HoverEvent.ShowText(
-                            Component.translatableWithFallback("clickcoords.tooltip.copy", tooltip, hit.copy())));
+                            Component.translatableWithFallback("clickcoords.tooltip.copy", tooltip, hit.copy())
+                                    .append("\n").append(Component.translatableWithFallback(
+                                            "clickcoords.tooltip.waypoint", waypointTooltip))));
                 }
                 int end = Math.min(span.end, hit.end());
                 append(output, text, cursor, end, styled);

@@ -1,1 +1,4 @@
-{"clickcoords.tooltip.copy":"Click to copy: %s"}
+{
+  "clickcoords.tooltip.copy": "Click to copy: %s",
+  "clickcoords.tooltip.waypoint": "Shift+click: toggle waypoint"
+}
