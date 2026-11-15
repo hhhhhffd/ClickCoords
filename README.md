@@ -11,6 +11,7 @@
 <p>
 <a href="https://github.com/hhhhhffd/ClickCoords/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/hhhhhffd/ClickCoords?style=flat-square"></a>
 <a href="https://github.com/hhhhhffd/ClickCoords/releases"><img alt="Release downloads" src="https://img.shields.io/github/downloads/hhhhhffd/ClickCoords/total?style=flat-square"></a>
+<a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/hhhhhffd/ClickCoords?style=flat-square"></a>
 </p>
 <p><a href="https://github.com/hhhhhffd/ClickCoords/releases">Download</a> · <a href="#architecture">Architecture</a> · <a href="#build">Build</a></p>
 </div>
@@ -92,4 +93,4 @@ java -cp build/parser-test CoordinateParserTest
 
 ## License
 
-Not specified; no license file is present in this repository.
+Licensed under the [MIT License](LICENSE).
