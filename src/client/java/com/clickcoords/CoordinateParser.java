@@ -50,12 +50,19 @@ public final class CoordinateParser {
     private static final Pattern LABELED_PAIR = Pattern.compile(
             "(?<![\\p{L}\\p{N}_])x" + H + "(?:" + PUNCT + H + ")?(" + NUM + ")"
             + DIV + "z" + H + "(?:" + PUNCT + H + ")?(" + NUM + ")" + RIGHT, FLAGS);
-    private static final Pattern STANDALONE = Pattern.compile(H + NUM + DIV + NUM + "(?:" + DIV + NUM + ")?" + H, FLAGS);
+    private static final String NAME = "[A-Za-z0-9_]{1,16}";
+    // Plain vanilla <Name>, common ranked-server prefixes and numeric-only chat bodies.
+    private static final String CHAT_BADGE = "(?:\\[[^\\[\\]\\r\\n]{1,32}\\]|[\\p{S}\\p{Co}\\p{Pd}\\uFE0F]{1,6})";
+    private static final String CHAT_ARROW = "[\\p{P}\\p{S}\\p{Co}&&[^\\[\\]()/+−-]]{1,3}";
+    private static final Pattern NUMERIC_BODY = Pattern.compile(H
+            + "(?:(?:<" + NAME + ">|(?:" + CHAT_BADGE + H + "){0,5}" + NAME + H + CHAT_ARROW + ")" + H + ")?"
+            + "(" + NUM + DIV + NUM + "(?:" + DIV + NUM + ")?)" + H, FLAGS);
 
     /** Explicit coordinate context may take priority over an inherited plugin chat action. */
     public static boolean explicitCoordinates(String text, Match m) {
         return hasCoordinateCue(text, m.start) || LABELED.matcher(text.substring(m.start, m.end)).matches()
-                || LABELED_PAIR.matcher(text.substring(m.start, m.end)).matches();
+                || LABELED_PAIR.matcher(text.substring(m.start, m.end)).matches()
+                || numericBodyStart(text) == m.start;
     }
 
     private CoordinateParser() {}
@@ -65,6 +72,7 @@ public final class CoordinateParser {
 
     public static List<Match> find(String text) {
         if (text == null || text.length() < 5 || text.length() > MAX_MESSAGE_LENGTH) return List.of();
+        int numericBodyStart = numericBodyStart(text);
         ArrayList<Match> out = new ArrayList<>();
         Matcher labels = LABELED.matcher(text);
         while (out.size() < MAX_MATCHES && labels.find()) add(out, labels, 1, 2, 3);
@@ -84,7 +92,7 @@ public final class CoordinateParser {
         }
         Matcher plain = UNLABELED.matcher(text);
         while (out.size() < MAX_MATCHES && plain.find()) {
-            if (!(hasCoordinateCue(text, plain.start()) || STANDALONE.matcher(text).matches())
+            if (!(hasCoordinateCue(text, plain.start()) || numericBodyStart == plain.start())
                     || adjacentWhitespaceValue(text, plain.end())) continue;
             add(out, plain, 1, 2, 3);
         }
@@ -103,7 +111,7 @@ public final class CoordinateParser {
         while (out.size() < MAX_MATCHES && labeledPairs.find()) add(out, labeledPairs, 1, 2, 0);
         Matcher pairs = PAIR.matcher(text);
         while (out.size() < MAX_MATCHES && pairs.find()) {
-            if (!(hasCoordinateCue(text, pairs.start()) || STANDALONE.matcher(text).matches())
+            if (!(hasCoordinateCue(text, pairs.start()) || numericBodyStart == pairs.start())
                     || THOUSANDS_PAIR.matcher(pairs.group()).matches() && !hasCoordinateCue(text, pairs.start())
                     || adjacentWhitespaceValue(text, pairs.end())
                     || adjacentDelimiterValue(text, pairs.start(), pairs.end(), ',')
@@ -123,6 +131,11 @@ public final class CoordinateParser {
     private static String normalize(String number) {
         String n = number.replace('−', '-');
         return n.charAt(0) == '+' ? n.substring(1) : n;
+    }
+
+    private static int numericBodyStart(String line) {
+        Matcher body = NUMERIC_BODY.matcher(line);
+        return body.matches() && !hasNumberListCue(line, body.start(1)) ? body.start(1) : -1;
     }
 
     private static boolean hasCoordinateCue(String line, int before) {

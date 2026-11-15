@@ -56,6 +56,11 @@ public class ChatCoordinatesTest {
                 Style.EMPTY.withClickEvent(new ClickEvent.CopyToClipboard("780 2500")));
         each(unrelatedCopy, (style, text) ->
                 check(ChatCoordinates.recognizedCopy(style.getClickEvent()) == null, "foreign copy accepted"));
-        System.out.println("7 Minecraft component regressions passed");
+        coords(Component.literal("☉ [Князь] Player ➜ §a100 400"), "100 400", "100 400");
+        coords(Component.literal("<Player> ").append(
+                Component.literal("100 64 400").withStyle(ChatFormatting.GREEN)), "100 64 400", "100 64 400");
+        Component chatter = Component.literal("[Игрок] Player ➜ куплю 100 400 блоков");
+        check(ChatCoordinates.decorate(chatter, true) == chatter, "non-coordinate player chat modified");
+        System.out.println("10 Minecraft component regressions passed");
     }
 }

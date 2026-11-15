@@ -74,6 +74,17 @@ public class CoordinateParserTest {
         expect("Coords: 1,2,3,4");
         expect("Time: 12:30");
         expect("Coords: 780 2500 and XYZ: 1 20 30", "780 2500", "780 2500", "1 20 30", "1 20 30");
+        expect("☉ [Князь] _k0t1k ➜ 100 400", "100 400", "100 400");
+        expect("[Князь] Player » 100 400", "100 400", "100 400");
+        expect("⚡[Игрок] Player ⇒ -120 64 912", "-120 64 912", "-120 64 912");
+        expect("<Player> 100 400", "100 400", "100 400");
+        expect("<Player> 100 60 400", "100 60 400", "100 60 400");
+        expect("Player: 100, 400", "100, 400", "100 400");
+        expect("Time: 12 30");
+        expect("<Player> продам за 100 400 монет");
+        expect("[Князь] Player ➜ 100 60 400 500");
+        expect("[Игрок] Player ➜ где 100 400 в чате");
+        expect("Invalid[/warp] 100 400");
         System.out.println(cases + " Java parser test cases passed");
     }
 }
